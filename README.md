@@ -12,4 +12,4 @@ Small browser games built on real quantum mechanics: the uncertainty principle, 
 
 ![Collapse: The Long Way](collapse/screenshots/the-long-way.png)
 
-Each game is a single HTML file with no build step, so it runs straight from GitHub Pages. The root `index.html` is the landing page. [DESIGN.md](DESIGN.md) has the design for Collapse and for the games planned next (Dark Port and Spooky Action).
+Each game is a single HTML file with no build step, so it runs straight from GitHub Pages. The root `index.html` is the landing page. [DESIGN.md](DESIGN.md) has the design for Collapse and for the games planned next (Dark Port and Spooky Action), and [TODO.md](TODO.md) lists what's next.

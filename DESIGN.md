@@ -3,6 +3,8 @@
 Three small games, each built on one piece of real quantum mechanics. They follow the same rules:
 
 - **One standalone HTML file per game.** No build step, no server, no install, so each game can go on GitHub Pages and be shared as a link. Use a server only if there is a very strong reason.
+- **A tile on the landing page** that looks like the game's title screen and opens the game.
+- **A real puzzle, not luck.** Each level has a one-sentence goal and needs one insight. Tests check that the reference solution works and that the tempting wrong ideas fall short.
 - **A title screen first.** It is almost static and offers **New Game**, **Info** and **Controls**. Info explains the physics honestly: what is real, what is tuned, and what you could never see in a real lab.
 - **Real physics, tuned for play.** Each game keeps the physics in a pure `<script id="engine">` block, so Node tests can check the physics and play the levels.
 
