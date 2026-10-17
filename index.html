@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quantum Games</title>
+<meta name="description" content="Small browser games built on real quantum mechanics.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Landing page for GitHub Pages. Same single dark theme as the games. */
+:root{--void:#070a14;--panel:#0e1226;--grid:#1b2145;--ink:#e8eaf7;--muted:#8a90b8;--wave:#5ef2d6;
+  --display:'Michroma','Eurostile',system-ui,sans-serif;--body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;--mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;color-scheme:dark}
+html,body{background:var(--void);color:var(--ink)}
+body{margin:0;font-family:var(--body);font-size:15px;line-height:1.55;padding:48px max(16px,env(safe-area-inset-left,0px)) 48px max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:860px;margin:0 auto;display:grid;gap:28px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,5vw,40px);letter-spacing:.12em;margin:0}
+.lede{color:var(--muted);margin:6px 0 0;max-width:60ch}
+.games{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.game{border:1px solid var(--grid);border-radius:6px;background:var(--panel);padding:16px;display:grid;gap:8px;text-decoration:none;color:inherit}
+a.game:hover{border-color:var(--wave)}
+a.game:focus-visible{outline:2px solid var(--wave);outline-offset:2px}
+.game h2{font-family:var(--display);font-weight:400;font-size:16px;letter-spacing:.08em;margin:0}
+.game p{margin:0;font-size:14px;color:var(--muted)}
+.tag{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--wave)}
+/* A game's tile looks like its title screen: its art, its wordmark and its tagline. */
+.cover{position:relative;aspect-ratio:16/10;border-radius:4px;overflow:hidden;border:1px solid var(--grid);background:var(--void);display:grid;place-items:center;text-align:center}
+.cover canvas{position:absolute;inset:0;width:100%;height:100%;opacity:.45}
+.cover::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,color-mix(in srgb,var(--void) 70%,transparent) 0%,transparent 60%)}
+.cover .mark{position:relative;z-index:1;display:grid;gap:6px;padding:12px}
+.cover .name{font-family:var(--display);font-size:clamp(22px,4.5vw,30px);letter-spacing:.14em;text-shadow:0 0 18px color-mix(in srgb,var(--wave) 45%,transparent)}
+.cover .tagline{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.06em}
+.cover .play{justify-self:center;margin-top:8px;font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;background:var(--wave);color:var(--void);border-radius:4px;padding:6px 14px;font-weight:500}
+footer{font-family:var(--mono);font-size:12px;color:var(--muted)}
+footer a{color:var(--wave)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>QUANTUM GAMES</h1>
+    <p class="lede">Small browser games built on real quantum mechanics: uncertainty, collapse, tunnelling, interference, the Zeno effect and entanglement. Each one runs in a single page with nothing to install.</p>
+  </header>
+  <div class="games">
+    <a class="game" href="collapse/" aria-label="Play Collapse">
+      <div class="cover">
+        <canvas data-art="slits" aria-hidden="true"></canvas>
+        <div class="mark"><div class="name">COLLAPSE</div><div class="tagline">you are a wave until someone looks</div><span class="play">Play</span></div>
+      </div>
+      <p>A puzzle game on a real Schrödinger simulation. Place mirrors, walls and watchers to steer a wave into the exit, using tunnelling, the uncertainty principle and the quantum Zeno effect.</p>
+    </a>
+  </div>
+  <footer>Sibling of <a href="https://krishnashub.github.io/causal-games/">Causal Games</a>, time travel built on real physics.</footer>
+</div>
+<script>
+// Draw each tile's cover art once: Collapse's is the same still double-slit pattern as its title screen.
+document.querySelectorAll('canvas[data-art="slits"]').forEach(c=>{
+  const w=c.width=480,h=c.height=300,g=c.getContext('2d'),img=g.createImageData(w,h),k=0.42,sx=w*0.12,s1=h*0.5-h*0.09,s2=h*0.5+h*0.09;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    let v=0;
+    if(x>sx){const d1=Math.hypot(x-sx,y-s1),d2=Math.hypot(x-sx,y-s2),a=Math.cos(k*d1)/Math.sqrt(d1+4)+Math.cos(k*d2)/Math.sqrt(d2+4),env=Math.cos((d1-d2)*k/2);
+      v=Math.min(1,env*env*3.2/Math.sqrt((x-sx)/w*6+1))*Math.min(1,(x-sx)/(w*0.05))*(0.35+0.65*Math.abs(a)*3);}
+    else v=Math.exp(-((y-h/2)**2)/(2*(h*0.12)**2))*0.18;
+    const i=(y*w+x)*4;img.data[i]=94*v;img.data[i+1]=242*v;img.data[i+2]=214*v;img.data[i+3]=255;
+  }
+  g.putImageData(img,0,0);
+});
+</script>
+</body>
+</html>

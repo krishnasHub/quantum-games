@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Collapse</title>
+<meta name="description" content="A quantum puzzle game on a real Schrödinger simulation: place mirrors, walls and watchers to steer a wave into the exit, using tunnelling, Heisenberg's uncertainty principle and the quantum Zeno effect.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Same console layout as the causal-games prototypes. Deliberately single dark theme.
+   Teal is the wave, green the exit, magenta a trap, violet a barrier, silver a mirror, amber a watcher's gaze. */
+:root{
+  --void:#070a14; --panel:#0e1226; --floor:#0b0f20; --grid:#1b2145; --wall:#262c5c; --wallhi:#3a4386; --glass:#132036;
+  --ink:#e8eaf7; --muted:#8a90b8;
+  --wave:#5ef2d6; --bar:#b58cff; --mirror:#dfe6ff; --sight:#f5b14c; --trap:#ff5c8a; --exit:#8ef0b0; --placed:#3d4a9a;
+  --display:'Michroma','Eurostile','Bank Gothic',system-ui,sans-serif;
+  --body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'Cascadia Mono',Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{background:var(--void);color:var(--ink)}
+body{margin:0;font-family:var(--body);font-size:15px;line-height:1.5}
+[hidden]{display:none!important}
+a{color:var(--wave)}
+button{font-family:var(--mono);font-size:12.5px;background:transparent;color:var(--ink);border:1px solid var(--wall);border-radius:4px;padding:7px 11px;cursor:pointer;letter-spacing:.02em}
+button:hover:not(:disabled){border-color:var(--wave)}
+button:focus-visible{outline:2px solid var(--wave);outline-offset:2px}
+button:disabled{opacity:.4;cursor:default}
+button.on{border-color:var(--wave);color:var(--wave)}
+button.primary{background:var(--wave);color:var(--void);border-color:var(--wave);font-weight:500}
+kbd{font-family:var(--mono);font-size:11.5px;color:var(--ink);border:1px solid var(--wall);border-bottom-width:2px;border-radius:3px;padding:1px 5px;white-space:nowrap}
+
+/* ---------- Title screen ---------- */
+#title{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-left,0px));box-sizing:border-box;position:relative;overflow:hidden}
+#titleArt{position:absolute;inset:0;width:100%;height:100%;opacity:.32}
+#title::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,color-mix(in srgb,var(--void) 70%,transparent) 0%,transparent 45%);pointer-events:none}
+.tcard{position:relative;z-index:1;max-width:580px;width:100%;display:grid;gap:22px;text-align:center}
+.tname{font-family:var(--display);font-weight:400;font-size:clamp(36px,9vw,72px);letter-spacing:.14em;margin:0;text-shadow:0 0 28px color-mix(in srgb,var(--wave) 45%,transparent)}
+.ttag{font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:.06em;margin:-8px 0 0}
+.tmenu{display:grid;gap:10px;justify-self:center;width:min(260px,100%)}
+.tmenu button{font-size:14px;padding:11px 14px;letter-spacing:.12em;text-transform:uppercase;background:color-mix(in srgb,var(--void) 70%,transparent)}
+.tmenu button.primary{background:var(--wave)}
+.tpanel{text-align:left;background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--grid);border-radius:6px;padding:18px 20px;display:grid;gap:12px;max-height:min(70vh,640px);overflow:auto}
+.tpanel h2{font-family:var(--display);font-weight:400;font-size:16px;letter-spacing:.08em;margin:0}
+.tpanel h3{font-size:14px;margin:6px 0 0;color:var(--wave);font-weight:600}
+.tpanel p{margin:0;opacity:.92;font-size:14px}
+.tpanel ul{margin:0;padding-left:18px;font-size:14px;display:grid;gap:4px}
+.tpanel dl{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;margin:0;font-size:14px}
+.tpanel dt{color:var(--muted)} .tpanel dd{margin:0}
+.tfoot{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+
+/* ---------- Game ---------- */
+#game{padding-block:20px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1240px;margin:0 auto;display:grid;gap:18px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(20px,3.2vw,28px);letter-spacing:.1em;margin:0}
+.sub{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.04em;margin-top:4px}
+.levels{display:flex;flex-wrap:wrap;gap:8px}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
+@media (max-width:960px){.main{grid-template-columns:minmax(0,1fr)}}
+.stage{position:relative;border:1px solid var(--grid);background:var(--floor);border-radius:6px;overflow:hidden;min-width:0}
+#field{display:block;width:100%;aspect-ratio:2/1;touch-action:none}
+.scorebar{border-top:1px solid var(--grid);padding:10px 14px;display:grid;gap:6px;font-family:var(--mono);font-size:12.5px}
+.track{position:relative;height:14px;border-radius:7px;background:var(--grid);overflow:visible}
+.track .fill{position:absolute;inset:0 auto 0 0;background:var(--exit);border-radius:7px;width:0}
+.track .lost{position:absolute;top:0;bottom:0;right:0;background:var(--trap);opacity:.7;border-radius:0 7px 7px 0;width:0}
+.track .tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--sight)}
+.track .tick span{position:absolute;top:-17px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--sight);white-space:nowrap}
+.scoreline{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 14px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:6px}
+.scoreline b{color:var(--ink);font-weight:500}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--void) 80%,transparent);padding:16px}
+.card{max-width:460px;text-align:center;display:grid;gap:12px}
+.card h2{font-family:var(--display);font-weight:400;font-size:20px;letter-spacing:.06em;margin:0}
+.card p{margin:0;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.stars{font-size:24px;letter-spacing:.2em;color:var(--sight)}
+aside{display:grid;gap:14px;min-width:0}
+section{border:1px solid var(--grid);border-radius:6px;padding:14px;display:grid;gap:10px;background:var(--panel)}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.lvname{font-family:var(--display);font-size:16px;letter-spacing:.05em}
+.goal{margin:0;font-weight:600;color:var(--exit)}
+.brief{margin:0;opacity:.9;font-size:14px}
+.hint{margin:0;font-size:14px;border-left:2px solid var(--sight);padding-left:10px;color:var(--ink)}
+.palette{display:flex;flex-wrap:wrap;gap:8px}
+.palette button{display:flex;align-items:center;gap:8px}
+.palette svg{width:18px;height:18px;flex:none}
+.seg{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.seg span{min-width:48px}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.small{font-size:13px;color:var(--muted);margin:0}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;color:var(--muted);margin:0}
+.keys dd{margin:0}
+</style>
+</head>
+<body>
+
+<!-- Title screen: static art, three choices. -->
+<main id="title">
+  <canvas id="titleArt" aria-hidden="true"></canvas>
+  <div class="tcard">
+    <h1 class="tname">COLLAPSE</h1>
+    <p class="ttag">you are a wave until someone looks</p>
+    <div class="tmenu" id="tmenu">
+      <button class="primary" id="newBtn">New Game</button>
+      <button id="contBtn" hidden>Continue</button>
+      <button id="infoBtn">Info</button>
+      <button id="ctrlBtn">Controls</button>
+    </div>
+
+    <div class="tpanel" id="infoPanel" hidden>
+      <h2>HOW IT WORKS</h2>
+      <p>You are a quantum particle. Until something finds you, you are not in one place: you are a wave, spread over everywhere you might be. The glow on screen is that wave (strictly, |ψ|², the chance of finding you at each point).</p>
+      <p><b>Each level is a puzzle.</b> Place parts (mirrors, walls, watchers), choose how you launch, and press Play. The wave flows out of the source and spreads through the level. The exit is a detector: any of the wave that flows into it is caught. Your score is the share caught at the exit. That is exactly the chance that, when the particle is finally found, it is found at the exit: in 70 out of 100 universes, you made it. No dice are rolled; the same setup always scores the same.</p>
+      <p>Everything comes from a real simulation of the Schrödinger equation. Nothing is scripted, so the physics below is the puzzle.</p>
+      <h3>Waves go round things</h3>
+      <p>A wave bends around anything smaller than itself. That is why mirrors and walls are three tiles long: a one-tile mirror would let most of you slip past.</p>
+      <h3>Heisenberg's uncertainty principle</h3>
+      <p>A wave cannot be both narrow and have a single wavelength. So the more sharply your position is defined (Δx), the more spread out your momentum is (Δp), and Δx·Δp never drops below ħ/2. A narrow packet fans out quickly. A wide one holds together.</p>
+      <h3>Tunnelling</h3>
+      <p>A barrier taller than your energy would stop a ball every time. A wave decays inside the barrier instead of stopping dead, and if the barrier is thin, a little of it comes out the other side.</p>
+      <h3>Interference</h3>
+      <p>Where the wave meets itself, after bouncing off walls or splitting around an obstacle, it adds up in some places and cancels in others. The ripples and stripes you see are real.</p>
+      <h3>The quantum Zeno effect</h3>
+      <p>A trap is a detector that catches you. A watcher who never stops looking is different: each instant it checks "is the particle here?", almost nothing has leaked in since the last check, so it almost never finds you, and the wave is pushed back out. In the limit of constant watching (Zeno dynamics), the watcher's line of sight acts exactly like a wall. A watched pot never boils.</p>
+      <h3>What is real and what is tuned</h3>
+      <ul>
+        <li>Real: the Schrödinger evolution (split-step Fourier method, ħ = m = 1, lengths in grid cells), tunnelling, interference, the uncertainty bound, and the probabilities that make up your score.</li>
+        <li>Tuned: the world is 2D and 256 × 128 cells; detectors absorb with soft edges; a watcher's gaze uses the continuous-watching limit.</li>
+        <li>Not possible in reality: seeing the wave. A real experimenter only ever sees where the particle was found. The glow is the game letting you peek at the math.</li>
+      </ul>
+      <h3>Further reading</h3>
+      <ul>
+        <li><a href="https://www.feynmanlectures.caltech.edu/III_01.html" target="_blank" rel="noopener">Feynman Lectures, Vol. III, Ch. 1: Quantum Behavior</a></li>
+        <li><a href="https://en.wikipedia.org/wiki/Uncertainty_principle" target="_blank" rel="noopener">Uncertainty principle</a> · <a href="https://en.wikipedia.org/wiki/Quantum_tunnelling" target="_blank" rel="noopener">Quantum tunnelling</a> · <a href="https://en.wikipedia.org/wiki/Quantum_Zeno_effect" target="_blank" rel="noopener">Quantum Zeno effect</a> · <a href="https://en.wikipedia.org/wiki/Born_rule" target="_blank" rel="noopener">Born rule</a></li>
+      </ul>
+      <button class="back">Back</button>
+    </div>
+
+    <div class="tpanel" id="ctrlPanel" hidden>
+      <h2>CONTROLS</h2>
+      <dl>
+        <dt>Pick a part</dt><dd>Click it in the Parts panel, or press <kbd>1</kbd>–<kbd>4</kbd></dd>
+        <dt>Place</dt><dd>Click the field. A green ghost means it fits; red means it doesn't</dd>
+        <dt>Turn</dt><dd>Click a placed part, or press <kbd>Q</kbd> / <kbd>E</kbd> (or use the wheel) before placing</dd>
+        <dt>Remove</dt><dd>Right-click a placed part, or use the Remove tool</dd>
+        <dt><kbd>Space</kbd></dt><dd>Play, or stop and go back to building</dd>
+        <dt><kbd>F</kbd></dt><dd>Run three times as fast</dd>
+        <dt><kbd>P</kbd></dt><dd>Phase view: colour shows the wave's phase</dd>
+        <dt><kbd>H</kbd></dt><dd>Show the hint</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Back to the title screen</dd>
+      </dl>
+      <p>One star clears a level. Your parts stay where you left them, so you can tweak and run again as often as you like.</p>
+      <button class="back">Back</button>
+    </div>
+    <div class="tfoot">a quantum puzzle game · single page, no install</div>
+  </div>
+</main>
+
+<div id="game" hidden>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>COLLAPSE</h1>
+      <div class="sub">you are a wave until someone looks</div>
+    </div>
+    <div class="levels" id="levels"></div>
+  </header>
+  <div class="main">
+    <div class="stage" id="stage">
+      <canvas id="field" aria-label="Play field: the glowing cloud is where the particle might be"></canvas>
+      <div class="scorebar">
+        <div class="track" id="track"><div class="fill" id="fill"></div><div class="lost" id="lostBar"></div></div>
+        <div class="scoreline"><span>At the exit <b id="sExit">0%</b></span><span>Lost to traps <b id="sLost">0%</b></span><span>Still wandering <b id="sLeft">100%</b></span><span>Time <b id="sTime">0.0 s</b></span></div>
+      </div>
+      <div class="overlay" id="endCard" hidden>
+        <div class="card">
+          <h2 id="endTitle"></h2>
+          <div class="stars" id="endStars"></div>
+          <p id="endText"></p>
+          <div class="row" id="endBtns"></div>
+        </div>
+      </div>
+    </div>
+    <aside>
+      <section>
+        <div class="eyebrow" id="lvIdx">Level 1</div>
+        <div class="lvname" id="lvName"></div>
+        <p class="goal" id="lvGoal"></p>
+        <p class="brief" id="lvBrief"></p>
+        <p class="hint" id="lvHint" hidden></p>
+        <div class="btns"><button id="hintBtn">Show hint (H)</button></div>
+      </section>
+      <section id="partsSec">
+        <div class="eyebrow">Parts</div>
+        <div class="palette" id="palette"></div>
+        <p class="small" id="partHelp"></p>
+      </section>
+      <section id="launchSec">
+        <div class="eyebrow">Launch</div>
+        <div class="seg" id="segWidth"><span>Width</span><button data-v="narrow">Narrow</button><button data-v="wide">Wide</button></div>
+        <div class="seg" id="segSpeed"><span>Speed</span><button data-v="slow">Slow</button><button data-v="fast">Fast</button></div>
+      </section>
+      <section>
+        <div class="btns">
+          <button class="primary" id="playBtn">Play (Space)</button>
+          <button id="fastBtn">Fast (F)</button>
+          <button id="clearBtn">Clear parts</button>
+          <button id="phaseBtn">Phase view (P)</button>
+          <button id="menuBtn">Title (Esc)</button>
+        </div>
+        <p class="small" id="uncert"></p>
+      </section>
+    </aside>
+  </div>
+</div>
+</div>
+<script id="engine">
+/* Engine: a real 2D Schrödinger simulation (split-step Fourier, hbar = m = 1, lengths in grid cells) and the puzzle rules.
+   No DOM access and no randomness, so tests/verify-levels.js can run it in Node and get the same answer every time.
+   A level is a map plus the parts the player placed. Press Play: a wave packet leaves the source and evolves.
+   The exit is a perfect detector: whatever probability flows into it is caught and counted. Detectors marked as traps
+   catch probability too, but that part of you is lost. Your score is the share of you that reaches the exit, which is
+   the chance that, when the particle is finally found, it is found at the exit. */
+(function(root){
+const NX=256,NY=128,N=NX*NY,TILE=8,TW=NX/TILE,TH=NY/TILE;
+const TPS=60,SUB=2,DT=0.25;            // 2 substeps per tick: 30 time units per real second
+const V_WALL=6,V_BAR=1.35,BAR_W=2;     // wall height; barrier height and thickness (cells)
+const MIRROR_W=2.4;                    // mirror thickness (cells)
+const SPEEDS={slow:0.9,fast:1.5};      // launch momentum (hbar k, per cell)
+const WIDTHS={narrow:3,wide:7};        // launch packet width sigma (cells)
+const ABSORB=0.4;                      // detector strength per tick at full mask
+const PARTS=['mirror','wall','barrier','eye'];
+const DIRS=[[1,0],[0,1],[-1,0],[0,-1]];      // eye directions: right, down, left, up
+
+/* Levels. stars: the share of the wave at the exit (%) for one, two and three stars; one star clears the level.
+   parts: how many of each part you can place. choose: launch settings you pick (otherwise width and speed are fixed).
+   T: seconds the wave runs for. vbar: barrier height, if not the default. */
+const LEVELS=[
+ {name:'Mirror',stars:[30,50,65],T:8,parts:{mirror:1},
+  brief:'The source fires your wave to the right. The exit is round the corner, at the bottom.',
+  hint:"Put the mirror in the beam's path and turn it so it sends the wave down. Click a placed mirror to turn it.",
+  map:[
+  "################################",
+  "#..............................#",
+  "#..............................#",
+  "#..S...........................#",
+  "#..............................#",
+  "#..............................#",
+  "###################............#",
+  "###################............#",
+  "###################............#",
+  "###################............#",
+  "###################............#",
+  "###################............#",
+  "###################....EEE.....#",
+  "###################....EEE.....#",
+  "###################....EEE.....#",
+  "################################"]},
+ {name:'Periscope',stars:[25,40,52],T:9,parts:{mirror:2},
+  brief:'Straight ahead is a trap: a detector that catches the wave and keeps it. The exit is up through the gap and off to the right.',
+  hint:'Two mirrors make a periscope: one to send the beam up through the gap, one to turn it toward the exit.',
+  map:[
+  "################################",
+  "############...................#",
+  "############...............EEE.#",
+  "############...............EEE.#",
+  "############...............EEE.#",
+  "############...................#",
+  "############...................#",
+  "############...................#",
+  "##################.....#########",
+  "##################.....#########",
+  "#.............................x#",
+  "#.............................x#",
+  "#..S..........................x#",
+  "#.............................x#",
+  "#.............................x#",
+  "################################"]},
+ {name:'Uncertainty',stars:[30,40,50],T:9,parts:{},choose:true,width:'narrow',speed:'slow',
+  brief:'No parts this time. Choose the packet you launch: narrow or wide, slow or fast. The exit is behind a small gap, far away.',
+  hint:'A narrow packet looks as if it would slip through the gap more easily. But a packet that is sharp in position is blurry in momentum (Heisenberg), so it fans out on the way and most of it hits the wall. Wide and fast stays together.',
+  map:[
+  "################################",
+  "#....:::::::::::::::::::########",
+  "#....:::::::::::::::::::########",
+  "#....:::::::::::::::::::########",
+  "#....:::::::::::::::::::########",
+  "#....:::::::::::::::::::#......#",
+  "#....:::::::::::::::::::#...EE.#",
+  "#..S.:::::::::::::::::::....EE.#",
+  "#....:::::::::::::::::::....EE.#",
+  "#....:::::::::::::::::::#...EE.#",
+  "#....:::::::::::::::::::#......#",
+  "#....:::::::::::::::::::########",
+  "#....:::::::::::::::::::########",
+  "#....:::::::::::::::::::########",
+  "#....:::::::::::::::::::########",
+  "################################"]},
+ {name:'Tunnel',stars:[30,45,53],T:16,vbar:1.15,parts:{wall:3},
+  brief:'The only way to the exit is through the glowing barrier, and it is higher than any energy you have. Behind you is a drain that catches whatever bounces back.',
+  hint:'Each time the wave hits the barrier, a little tunnels through and the rest bounces back. Wall off the drain, so the bounce comes back for another try.',
+  map:[
+  "################################",
+  "#############..................#",
+  "#############..................#",
+  "#x.:::::::::#..................#",
+  "#x.:::::::::#..................#",
+  "#x.:::::::::b.............EEE..#",
+  "#x.:::::::::b.............EEE..#",
+  "#x.::::S::::b.............EEE..#",
+  "#x.:::::::::b.............EEE..#",
+  "#x.:::::::::b.............EEE..#",
+  "#x.:::::::::b.............EEE..#",
+  "#x.:::::::::#..................#",
+  "#############..................#",
+  "#############..................#",
+  "#############..................#",
+  "################################"]},
+ {name:'Watched Pot',stars:[60,85,95],T:9,width:'narrow',parts:{eye:2},
+  brief:"A glass corridor runs between two pits. You can't build on glass, and your packet starts narrow, so it will spread into the pits. You have two watchers who never stop looking.",
+  hint:"A watcher who never blinks can't catch you: its constant gaze keeps the wave out (the quantum Zeno effect), so its line of sight is a wall that reaches across glass. Two gazes make a channel.",
+  map:[
+  "################################",
+  "#....:xxxxxxxxxxxxxxxxxxxxx#####",
+  "#....:xxxxxxxxxxxxxxxxxxxxx#####",
+  "#....:xxxxxxxxxxxxxxxxxxxxx#####",
+  "#....::::::::::::::::::::::#####",
+  "#....::::::::::::::::::::::#####",
+  "#....::::::::::::::::::::::EE###",
+  "#..S.::::::::::::::::::::::EE###",
+  "#....::::::::::::::::::::::EE###",
+  "#....::::::::::::::::::::::EE###",
+  "#....::::::::::::::::::::::#####",
+  "#....::::::::::::::::::::::#####",
+  "#....:xxxxxxxxxxxxxxxxxxxxx#####",
+  "#....:xxxxxxxxxxxxxxxxxxxxx#####",
+  "#....:xxxxxxxxxxxxxxxxxxxxx#####",
+  "################################"]},
+ {name:'The Long Way',stars:[30,42,48],T:12,width:'narrow',parts:{mirror:2,eye:2},
+  brief:'Up the corridor between the pits, then across the top to the exit. Everything you have learned.',
+  hint:'Turn the beam up into the corridor, guard the corridor with your watchers, and turn the beam again at the top.',
+  map:[
+  "################################",
+  "########....................EE.#",
+  "########....................EE.#",
+  "########..#...#.............EE.#",
+  "########xx:::::xx###############",
+  "########xx:::::xx###############",
+  "########xx:::::xx###############",
+  "########xx:::::xx###############",
+  "########xx:::::xx###############",
+  "########xx:::::xx###############",
+  "##########.:::.#################",
+  "#................###############",
+  "#.S..............###############",
+  "#................###############",
+  "#................###############",
+  "################################"]}
+];
+
+// ---------- FFT (radix-2, in place, on a line of a 2D array with a stride) ----------
+function fftTable(n){
+  const rev=new Uint32Array(n),cos=new Float64Array(n/2),sin=new Float64Array(n/2),bits=Math.log2(n);
+  for(let i=0;i<n;i++){let r=0;for(let b=0;b<bits;b++)r|=((i>>b)&1)<<(bits-1-b);rev[i]=r;}
+  for(let i=0;i<n/2;i++){cos[i]=Math.cos(2*Math.PI*i/n);sin[i]=Math.sin(2*Math.PI*i/n);}
+  return {n,rev,cos,sin};
+}
+function fftLine(re,im,off,str,T,inv){
+  const n=T.n,rev=T.rev,C=T.cos,S=T.sin;
+  for(let i=0;i<n;i++){const j=rev[i];if(j>i){const a=off+i*str,b=off+j*str;let t=re[a];re[a]=re[b];re[b]=t;t=im[a];im[a]=im[b];im[b]=t;}}
+  for(let size=2;size<=n;size<<=1){
+    const half=size>>1,step=n/size;
+    for(let i=0;i<n;i+=size)for(let j=0;j<half;j++){
+      const k=j*step,wr=C[k],wi=inv?S[k]:-S[k],a=off+(i+j)*str,b=a+half*str;
+      const tr=re[b]*wr-im[b]*wi,ti=re[b]*wi+im[b]*wr;
+      re[b]=re[a]-tr;im[b]=im[a]-ti;re[a]+=tr;im[a]+=ti;
+    }
+  }
+}
+const TX=fftTable(NX),TY=fftTable(NY);
+function fft2(re,im,inv){
+  for(let y=0;y<NY;y++)fftLine(re,im,y*NX,1,TX,inv);
+  for(let x=0;x<NX;x++)fftLine(re,im,x,NX,TY,inv);
+}
+// Kinetic propagator exp(-i k^2 dt / 2), with the inverse FFT's 1/N folded in.
+const KR=new Float64Array(N),KI=new Float64Array(N);
+for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+  const kx=2*Math.PI*(x<NX/2?x:x-NX)/NX,ky=2*Math.PI*(y<NY/2?y:y-NY)/NY,ph=-DT*(kx*kx+ky*ky)/2,i=y*NX+x;
+  KR[i]=Math.cos(ph)/N;KI[i]=Math.sin(ph)/N;
+}
+
+// ---------- Levels ----------
+/* Map legend (32 x 16 tiles of 8 x 8 cells): # wall, . floor you can build on, : floor you can't build on,
+   S source, E exit, x trap detector, b barrier, / and \ mirrors. Placed parts are 3 tiles long, centred on (tx, ty):
+   {type, tx, ty, rot}. Walls and barriers run vertically for rot 0 and horizontally for rot 1; a mirror is / for
+   rot 0 and \ for rot 1. Parts are long because a wave goes around anything narrower than itself.
+   An eye is one tile; rot 0-3 points it right, down, left or up. */
+function partTiles(p){
+  const r=p.rot||0;
+  if(p.type==='eye')return [[p.tx,p.ty]];
+  if(p.type==='mirror')return r?[[-1,-1],[0,0],[1,1]].map(([a,b])=>[p.tx+a,p.ty+b]):[[-1,1],[0,0],[1,-1]].map(([a,b])=>[p.tx+a,p.ty+b]);
+  return r?[[-1,0],[0,0],[1,0]].map(([a,b])=>[p.tx+a,p.ty+b]):[[0,-1],[0,0],[0,1]].map(([a,b])=>[p.tx+a,p.ty+b]);
+}
+// A part fits if every tile it covers is buildable floor and not taken by another part.
+function canPlace(L,placed,p){
+  const taken=new Set();for(const q of placed)if(q!==p)for(const [x,y] of partTiles(q))taken.add(y*TW+x);
+  return partTiles(p).every(([x,y])=>x>=0&&y>=0&&x<TW&&y<TH&&L.map[y][x]==='.'&&!taken.has(y*TW+x));
+}
+function buildLevel(L,placed){
+  const lv={L,source:null,exit:[],traps:[],tiles:[]};
+  for(let ty=0;ty<TH;ty++){lv.tiles.push([]);for(let tx=0;tx<TW;tx++){
+    const ch=L.map[ty][tx];let t={k:'floor',build:ch==='.'};
+    if(ch==='#')t={k:'wall'};
+    else if(ch==='b')t={k:'barrier',rot:barrierRot(L.map,tx,ty)};
+    else if(ch==='/'||ch==='\\')t={k:'mirror',rot:ch==='/'?0:1};
+    else if(ch==='E'){t={k:'exit'};lv.exit.push([tx,ty]);}
+    else if(ch==='x'){t={k:'trap'};lv.traps.push([tx,ty]);}
+    else if(ch==='S'){t={k:'floor'};lv.source={x:(tx+.5)*TILE,y:(ty+.5)*TILE};}
+    lv.tiles[ty].push(t);
+  }}
+  (placed||[]).forEach((p,id)=>{for(const [x,y] of partTiles(p))lv.tiles[y][x]={k:p.type,rot:p.rot||0,placed:true,id};});
+  // An eye that never stops looking: in the continuous-watching limit (Zeno dynamics) its line of sight confines the
+  // wave exactly as a wall would. The gaze runs over open floor and glass until it meets anything else.
+  lv.gaze=[];
+  for(let ty=0;ty<TH;ty++)for(let tx=0;tx<TW;tx++){const t=lv.tiles[ty][tx];if(t.k!=='eye')continue;
+    const [dx,dy]=DIRS[t.rot];let x=tx+dx,y=ty+dy;
+    while(x>=0&&y>=0&&x<TW&&y<TH&&lv.tiles[y][x].k==='floor'){lv.tiles[y][x]={k:'gaze',build:false};lv.gaze.push([x,y]);x+=dx;y+=dy;}}
+  const V=new Float64Array(N);
+  for(let ty=0;ty<TH;ty++)for(let tx=0;tx<TW;tx++){
+    const t=lv.tiles[ty][tx];
+    for(let y=0;y<TILE;y++)for(let x=0;x<TILE;x++){
+      const u=x+.5,v=y+.5,i=(ty*TILE+y)*NX+tx*TILE+x;
+      if(t.k==='wall'||t.k==='eye'||t.k==='gaze')V[i]=V_WALL;
+      else if(t.k==='barrier'){const lo=TILE/2-BAR_W/2,c=t.rot?v:u;if(c>=lo&&c<lo+BAR_W)V[i]=L.vbar||V_BAR;}
+      else if(t.k==='mirror'){const d=t.rot?Math.abs(u-v)/Math.SQRT2:Math.abs(u+v-TILE)/Math.SQRT2;if(d<MIRROR_W/2)V[i]=V_WALL;}
+    }
+  }
+  lv.V=V;lv.PR=new Float64Array(N);lv.PI=new Float64Array(N);
+  for(let i=0;i<N;i++){lv.PR[i]=Math.cos(-V[i]*DT/2);lv.PI[i]=Math.sin(-V[i]*DT/2);}
+  lv.exitMask=tileMask(lv.exit);lv.trapMask=tileMask(lv.traps);
+  return lv;
+}
+function barrierRot(map,tx,ty){const b=(x,y)=>map[y]&&'#b'.includes(map[y][x]);return b(tx,ty-1)&&b(tx,ty+1)&&!(b(tx-1,ty)&&b(tx+1,ty))?0:(b(tx-1,ty)||b(tx+1,ty))?1:0;}
+// A detector covering whole tiles, with its edge softened over a couple of cells so it catches without reflecting.
+function tileMask(tiles){
+  let f=new Float32Array(N);
+  for(const [tx,ty] of tiles)for(let y=0;y<TILE;y++)for(let x=0;x<TILE;x++)f[(ty*TILE+y)*NX+tx*TILE+x]=1;
+  for(let pass=0;pass<3;pass++){const g=new Float32Array(N);
+    for(let y=1;y<NY-1;y++)for(let x=1;x<NX-1;x++){const i=y*NX+x;g[i]=(f[i]*2+f[i-1]+f[i+1]+f[i-NX]+f[i+NX])/6;}f=g;}
+  const idx=[],val=[];for(let i=0;i<N;i++)if(f[i]>1e-4){idx.push(i);val.push(Math.exp(-ABSORB*f[i]));}
+  return {idx:Int32Array.from(idx),g:Float64Array.from(val),f};
+}
+
+// ---------- Simulation ----------
+function makeSim(lv,launch){
+  const L=lv.L,k=SPEEDS[launch&&launch.speed||L.speed||'fast'],sg=WIDTHS[launch&&launch.width||L.width||'wide'],a=(L.dir||0)*Math.PI/180;
+  const s={lv,re:new Float64Array(N),im:new Float64Array(N),tick:0,exit:0,lost:0,done:false,ticks:Math.round((L.T||8)*TPS)};
+  const kx=k*Math.cos(a),ky=k*Math.sin(a);
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const dx=x+.5-lv.source.x,dy=y+.5-lv.source.y,amp=Math.exp(-(dx*dx+dy*dy)/(4*sg*sg)),ph=kx*dx+ky*dy,i=y*NX+x;
+    s.re[i]=amp*Math.cos(ph);s.im[i]=amp*Math.sin(ph);
+  }
+  const n=Math.sqrt(norm2(s));for(let i=0;i<N;i++){s.re[i]/=n;s.im[i]/=n;}
+  return s;
+}
+function norm2(s){let t=0;for(let i=0;i<N;i++)t+=s.re[i]*s.re[i]+s.im[i]*s.im[i];return t;}
+// Detectors absorb: each tick they catch a share of the wave inside them, and that share is added up.
+function absorb(s,m){
+  let caught=0;const re=s.re,im=s.im,idx=m.idx,g=m.g;
+  for(let j=0;j<idx.length;j++){const i=idx[j],p=re[i]*re[i]+im[i]*im[i];caught+=p*(1-g[j]*g[j]);re[i]*=g[j];im[i]*=g[j];}
+  return caught;
+}
+function step(s){
+  if(s.done)return;
+  const lv=s.lv,re=s.re,im=s.im,PR=lv.PR,PI=lv.PI;
+  for(let sub=0;sub<SUB;sub++){
+    for(let i=0;i<N;i++){const a=re[i],b=im[i];re[i]=a*PR[i]-b*PI[i];im[i]=a*PI[i]+b*PR[i];}
+    fft2(re,im,false);
+    for(let i=0;i<N;i++){const a=re[i],b=im[i];re[i]=a*KR[i]-b*KI[i];im[i]=a*KI[i]+b*KR[i];}
+    fft2(re,im,true);
+    for(let i=0;i<N;i++){const a=re[i],b=im[i];re[i]=a*PR[i]-b*PI[i];im[i]=a*PI[i]+b*PR[i];}
+  }
+  s.exit+=absorb(s,lv.exitMask);s.lost+=absorb(s,lv.trapMask);
+  s.tick++;
+  if(s.tick>=s.ticks||1-s.exit-s.lost<0.005)s.done=true;
+}
+// Position and momentum spread along x and y, and the uncertainty products (each at least hbar/2 = 0.5).
+function stats(s){
+  let t=0,mx=0,my=0,mxx=0,myy=0;
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){const i=y*NX+x,p=s.re[i]*s.re[i]+s.im[i]*s.im[i];if(!p)continue;t+=p;mx+=p*x;my+=p*y;mxx+=p*x*x;myy+=p*y*y;}
+  const re=Float64Array.from(s.re),im=Float64Array.from(s.im);fft2(re,im,false);
+  let q=0,kx=0,ky=0,kxx=0,kyy=0;
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){const i=y*NX+x,p=re[i]*re[i]+im[i]*im[i],a=2*Math.PI*(x<NX/2?x:x-NX)/NX,b=2*Math.PI*(y<NY/2?y:y-NY)/NY;q+=p;kx+=p*a;ky+=p*b;kxx+=p*a*a;kyy+=p*b*b;}
+  const sd=(m2,m,n)=>Math.sqrt(Math.max(0,m2/n-(m/n)**2)),dx=sd(mxx,mx,t),dy=sd(myy,my,t),dkx=sd(kxx,kx,q),dky=sd(kyy,ky,q);
+  return {norm:t,dx,dy,dkx,dky,ux:dx*dkx,uy:dy*dky,kx:kx/q,ky:ky/q};
+}
+// Play a whole run without drawing. Returns the share caught at the exit, lost to traps, and still wandering.
+function run(L,placed,launch){
+  const s=makeSim(buildLevel(L,placed),launch);while(!s.done)step(s);
+  return {exit:s.exit,lost:s.lost,left:Math.max(0,1-s.exit-s.lost),seconds:s.tick/TPS};
+}
+
+root.QEngine={NX,NY,N,TILE,TW,TH,TPS,DT,SUB,V_WALL,V_BAR,BAR_W,MIRROR_W,SPEEDS,WIDTHS,PARTS,DIRS,LEVELS,partTiles,canPlace,buildLevel,makeSim,step,run,stats,norm2};
+})(typeof window!=='undefined'?window:globalThis);
+
+</script>
+<script>
+/* Page: title screen, building, playing, drawing. The physics and the rules live in the engine block above. */
+(function(){
+const E=window.QEngine,{NX,NY,N,TILE,TW,TH,TPS}=E;
+const $=id=>document.getElementById(id);
+const store={get(k){try{return JSON.parse(localStorage.getItem('collapse2.'+k));}catch(e){return null;}},
+             set(k,v){try{localStorage.setItem('collapse2.'+k,JSON.stringify(v));}catch(e){}}};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const pct=p=>p>0&&p<0.005?'<1%':Math.round(p*100)+'%';
+
+// ---------- Title screen ----------
+function drawTitleArt(){
+  // A still double-slit pattern: two point sources interfering, drawn once.
+  const c=$('titleArt'),w=c.width=Math.max(320,Math.round(innerWidth/3)),h=c.height=Math.max(200,Math.round(innerHeight/3));
+  const g=c.getContext('2d'),img=g.createImageData(w,h),k=0.32,sx=w*0.12,s1=h*0.5-h*0.09,s2=h*0.5+h*0.09,[r,gg,b]=hex(css('--wave'));
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    let v=0;
+    if(x>sx){const d1=Math.hypot(x-sx,y-s1),d2=Math.hypot(x-sx,y-s2),a=Math.cos(k*d1)/Math.sqrt(d1+4)+Math.cos(k*d2)/Math.sqrt(d2+4);
+      const env=Math.cos((d1-d2)*k/2);v=Math.min(1,env*env*3.2/Math.sqrt((x-sx)/w*6+1))*Math.min(1,(x-sx)/(w*0.05))*(0.35+0.65*Math.abs(a)*3);}
+    else v=Math.exp(-((y-h/2)**2)/(2*(h*0.12)**2))*0.18;
+    const i=(y*w+x)*4;img.data[i]=r*v;img.data[i+1]=gg*v;img.data[i+2]=b*v;img.data[i+3]=255;
+  }
+  g.putImageData(img,0,0);
+}
+function showTitle(){
+  stopLoop();$('game').hidden=true;$('title').hidden=false;
+  $('tmenu').hidden=false;$('infoPanel').hidden=true;$('ctrlPanel').hidden=true;
+  const saved=store.get('level');$('contBtn').hidden=!(saved>0);
+  if(saved>0)$('contBtn').textContent=`Continue · level ${saved+1}`;
+  drawTitleArt();$('newBtn').focus();
+}
+function showPanel(id){$('tmenu').hidden=true;$(id).hidden=false;$(id).querySelector('.back').focus();}
+$('newBtn').onclick=()=>startGame(0);
+$('contBtn').onclick=()=>startGame(store.get('level')||0);
+$('infoBtn').onclick=()=>showPanel('infoPanel');
+$('ctrlBtn').onclick=()=>showPanel('ctrlPanel');
+document.querySelectorAll('.back').forEach(b=>b.onclick=showTitle);
+
+// ---------- State ----------
+const NAMES={mirror:'Mirror',wall:'Wall',barrier:'Barrier',eye:'Watcher',remove:'Remove'};
+const HELP={mirror:'Three tiles long. Click it to flip between / and \\.',wall:'Three tiles long. Click it to turn it.',
+  barrier:'Three tiles long, thin enough to tunnel through. Click it to turn it.',
+  eye:'Never stops looking, so its line of sight is a wall that reaches across glass. Click it to turn it.',
+  remove:'Click a placed part to take it back.'};
+let lvIdx=0,L=null,placed=[],sel=null,launch={},mode='build',lv=null,sim=null,fast=false,showHint=false,hover=null,peak0=1,lastScore=0;
+let phaseView=store.get('phase')===true;
+const ghostRot={mirror:0,wall:0,barrier:0,eye:0};
+const remaining=t=>(L.parts[t]||0)-placed.filter(p=>p.type===t).length;
+const starsFor=x=>L.stars.filter(s=>x*100>=s-1e-9).length;
+
+function startGame(i){$('title').hidden=true;$('game').hidden=false;sizeCanvas();loadLevel(i);startLoop();}
+function loadLevel(i){
+  lvIdx=i;L=E.LEVELS[i];store.set('level',i);
+  const saved=store.get('setup'+i)||{};
+  placed=(saved.placed||[]).filter(p=>(L.parts[p.type]||0)>0);
+  launch={width:L.width||'wide',speed:L.speed||'fast',...(L.choose?saved.launch:{})};
+  sel=Object.keys(L.parts).find(t=>L.parts[t]>0)||null;
+  showHint=false;mode='build';
+  $('lvIdx').textContent=`Level ${i+1} of ${E.LEVELS.length}`;$('lvName').textContent=L.name;
+  $('lvGoal').textContent=`Goal: get ${L.stars[0]}% of the wave into the exit. ★★ at ${L.stars[1]}%, ★★★ at ${L.stars[2]}%.`;
+  $('lvBrief').textContent=L.brief;$('lvHint').textContent=L.hint;
+  $('partsSec').hidden=!Object.values(L.parts).some(n=>n>0);$('launchSec').hidden=!L.choose;
+  renderLevels();rebuild();
+}
+function renderLevels(){
+  const best=store.get('best')||{};$('levels').innerHTML='';
+  E.LEVELS.forEach((M,j)=>{const b=document.createElement('button'),st=best[j]?M.stars.filter(s=>best[j]*100>=s-1e-9).length:0;
+    b.textContent=`${j+1}. ${M.name}${st?' '+'★'.repeat(st):''}`;if(j===lvIdx)b.classList.add('on');b.onclick=()=>loadLevel(j);$('levels').appendChild(b);});
+}
+function save(){store.set('setup'+lvIdx,{placed,launch});}
+// Rebuild the level with the current parts and show the packet waiting at the source.
+function rebuild(){
+  lv=E.buildLevel(L,placed);sim=E.makeSim(lv,launch);lastScore=0;peak0=0;for(let i=0;i<N;i++)peak0=Math.max(peak0,sim.re[i]**2+sim.im[i]**2);
+  buildBase();renderPalette();renderLaunch();score();$('endCard').hidden=true;
+  $('lvHint').hidden=!showHint;$('hintBtn').textContent=showHint?'Hide hint (H)':'Show hint (H)';
+  $('playBtn').textContent=mode==='build'?'Play (Space)':'Stop (Space)';
+  const st=E.stats(sim);
+  $('uncert').textContent=`Launch: Δx ${(st.dx/TILE).toFixed(2)} tiles, Δp ${st.dkx.toFixed(2)} ħ/cell, Δx·Δp = ${st.ux.toFixed(2)} (Heisenberg's limit is 0.50).`;
+}
+function renderPalette(){
+  const pal=$('palette');pal.innerHTML='';
+  const types=Object.keys(L.parts).filter(t=>L.parts[t]>0);
+  [...types,'remove'].forEach((t,i)=>{
+    const b=document.createElement('button');b.innerHTML=icon(t)+`<span>${NAMES[t]}${t==='remove'?'':` ×${remaining(t)}`}</span>`;
+    b.title=`${NAMES[t]} (${i+1})`;if(sel===t)b.classList.add('on');b.disabled=mode!=='build';
+    b.onclick=()=>{sel=t;renderPalette();};pal.appendChild(b);});
+  $('partHelp').textContent=sel?HELP[sel]:'';
+}
+function icon(t){
+  const s=`stroke-width="2.4" stroke-linecap="round" fill="none"`;
+  if(t==='mirror')return `<svg viewBox="0 0 20 20"><line x1="4" y1="16" x2="16" y2="4" stroke="${css('--mirror')}" ${s}/></svg>`;
+  if(t==='wall')return `<svg viewBox="0 0 20 20"><rect x="7" y="2" width="6" height="16" rx="1" fill="${css('--wallhi')}"/></svg>`;
+  if(t==='barrier')return `<svg viewBox="0 0 20 20"><line x1="10" y1="2" x2="10" y2="18" stroke="${css('--bar')}" ${s}/></svg>`;
+  if(t==='eye')return `<svg viewBox="0 0 20 20"><ellipse cx="10" cy="10" rx="8" ry="5" fill="${css('--sight')}"/><circle cx="12" cy="10" r="2.5" fill="${css('--void')}"/></svg>`;
+  return `<svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="${css('--trap')}" ${s}/></svg>`;
+}
+function renderLaunch(){
+  for(const [id,key] of [['segWidth','width'],['segSpeed','speed']])
+    $(id).querySelectorAll('button').forEach(b=>{b.classList.toggle('on',launch[key]===b.dataset.v);b.disabled=mode!=='build';
+      b.onclick=()=>{launch[key]=b.dataset.v;save();rebuild();};});
+}
+
+// ---------- Play ----------
+function play(){mode='play';rebuild();}
+function stop(){mode='build';rebuild();}
+function finish(){
+  mode='done';const st=starsFor(sim.exit),best=store.get('best')||{};
+  if(!(best[lvIdx]>=sim.exit)){best[lvIdx]=sim.exit;store.set('best',best);}
+  if(st>0&&lvIdx+1<E.LEVELS.length&&(store.get('level')||0)<=lvIdx)store.set('level',lvIdx+1);
+  renderLevels();
+  $('endTitle').textContent=st===3?'PERFECT':st>0?'LEVEL CLEARED':'NOT YET';$('endTitle').className=st>0?'':'';
+  $('endStars').textContent='★'.repeat(st)+'☆'.repeat(3-st);
+  const next=L.stars.find(s=>sim.exit*100<s);
+  $('endText').textContent=`In ${Math.round(sim.exit*100)} of every 100 universes, you were found at the exit. `+
+    (sim.lost>0.005?`In ${Math.round(sim.lost*100)}, a trap caught you. `:'')+
+    (1-sim.exit-sim.lost>0.005?`In ${Math.round((1-sim.exit-sim.lost)*100)}, you were still wandering when time ran out. `:'')+
+    (next?`Next star at ${next}%.`:'');
+  const b=$('endBtns');b.innerHTML='';
+  const mk=(t,f,p)=>{const x=document.createElement('button');x.textContent=t;x.onclick=f;if(p)x.className='primary';b.appendChild(x);return x;};
+  mk('Adjust setup',stop,!(st>0&&lvIdx+1<E.LEVELS.length));
+  if(st>0&&lvIdx+1<E.LEVELS.length)mk('Next level',()=>loadLevel(lvIdx+1),true);
+  if(st>0&&lvIdx+1>=E.LEVELS.length)mk('Title screen',showTitle);
+  $('endCard').hidden=false;b.querySelector('.primary')?.focus();
+  $('playBtn').textContent='Play again (Space)';renderPalette();renderLaunch();
+}
+function score(){
+  const ex=sim.exit,lo=sim.lost,left=Math.max(0,1-ex-lo);
+  $('fill').style.width=(ex*100)+'%';$('lostBar').style.width=(lo*100)+'%';
+  $('sExit').textContent=pct(ex);$('sLost').textContent=pct(lo);$('sLeft').textContent=pct(left);$('sTime').textContent=(sim.tick/TPS).toFixed(1)+' s';
+  const t=$('track');t.querySelectorAll('.tick').forEach(e=>e.remove());
+  L.stars.forEach((s,i)=>{const d=document.createElement('div');d.className='tick';d.style.left=s+'%';d.innerHTML=`<span>${'★'.repeat(i+1)}</span>`;t.appendChild(d);});
+}
+
+// ---------- Loop ----------
+let running=false,raf=0;
+function startLoop(){if(running)return;running=true;raf=requestAnimationFrame(frame);}
+function stopLoop(){running=false;cancelAnimationFrame(raf);}
+function frame(){
+  if(!running)return;
+  if(mode==='play'){for(let n=fast?3:1;n>0&&!sim.done;n--)E.step(sim);
+    if(sim.tick-lastScore>=6||sim.done){score();lastScore=sim.tick;}
+    if(sim.done)finish();}
+  draw();raf=requestAnimationFrame(frame);
+}
+
+// ---------- Drawing ----------
+const field=$('field'),g=field.getContext('2d'),off=document.createElement('canvas');off.width=NX;off.height=NY;
+const og=off.getContext('2d'),img=og.createImageData(NX,NY),base=new Uint8ClampedArray(N*3);
+let S=4;
+function sizeCanvas(){const w=field.clientWidth||1024,dpr=Math.min(2,devicePixelRatio||1);field.width=Math.round(w*dpr);field.height=Math.round(w*dpr/2);S=field.width/NX;}
+addEventListener('resize',()=>{if(!$('game').hidden)sizeCanvas();});
+const C={mono:css('--mono')};for(const n of['--void','--floor','--glass','--wall','--wallhi','--wave','--bar','--mirror','--sight','--trap','--exit','--ink','--muted','--grid','--placed'])C[n]=css(n);
+const RGB={wave:hex(C['--wave']),floor:hex(C['--floor']),glass:hex(C['--glass']),exit:hex(C['--exit']),trap:hex(C['--trap']),sight:hex(C['--sight'])};
+// Per-cell background colour: floor, glass, a tint for the exit and traps, and a gaze tint.
+function buildBase(){
+  for(let ty=0;ty<TH;ty++)for(let tx=0;tx<TW;tx++){
+    const t=lv.tiles[ty][tx],ch=L.map[ty][tx];
+    let c=ch===':'||t.k==='gaze'&&ch===':'?RGB.glass:RGB.floor;
+    const mix=(a,b,f)=>[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];
+    if(t.k==='exit')c=mix(c,RGB.exit,0.22);else if(t.k==='trap')c=mix(c,RGB.trap,0.22);else if(t.k==='gaze')c=mix(c,RGB.sight,0.22);
+    for(let y=0;y<TILE;y++)for(let x=0;x<TILE;x++){const i=((ty*TILE+y)*NX+tx*TILE+x)*3;base[i]=c[0];base[i+1]=c[1];base[i+2]=c[2];}
+  }
+}
+function hsv(h,v){const i=Math.floor(h*6),f=h*6-i,q=1-f;const m=[[1,f,0],[q,1,0],[0,1,f],[0,q,1],[f,0,1],[1,0,q]][((i%6)+6)%6];return [m[0]*v*255,m[1]*v*255,m[2]*v*255];}
+function draw(){
+  const d=img.data,re=sim.re,im=sim.im;let mx=0;
+  for(let i=0;i<N;i++){const p=re[i]*re[i]+im[i]*im[i];if(p>mx)mx=p;}
+  mx=Math.max(mx,peak0*0.02);const inv=1/mx,w=RGB.wave;
+  for(let i=0;i<N;i++){
+    const v=Math.min(1,Math.pow((re[i]*re[i]+im[i]*im[i])*inv,0.45)),o=i*4,b=i*3;
+    if(phaseView&&v>0.02){const c=hsv((Math.atan2(im[i],re[i])/(2*Math.PI)+1)%1,v);d[o]=Math.max(base[b],c[0]);d[o+1]=Math.max(base[b+1],c[1]);d[o+2]=Math.max(base[b+2],c[2]);}
+    else{d[o]=base[b]+(w[0]-base[b])*v;d[o+1]=base[b+1]+(w[1]-base[b+1])*v;d[o+2]=base[b+2]+(w[2]-base[b+2])*v;}
+    d[o+3]=255;
+  }
+  og.putImageData(img,0,0);
+  g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(off,0,0,field.width,field.height);
+  const T=TILE*S,building=mode==='build';
+  // Buildable floor: faint dots while building.
+  if(building&&!$('partsSec').hidden){g.fillStyle=C['--grid'];
+    for(let ty=0;ty<TH;ty++)for(let tx=0;tx<TW;tx++)if(L.map[ty][tx]==='.'&&lv.tiles[ty][tx].k==='floor'){g.beginPath();g.arc((tx+.5)*T,(ty+.5)*T,Math.max(1.2,S*.4),0,7);g.fill();}}
+  // Exit and trap outlines.
+  outline(lv.exit,C['--exit'],'EXIT');outline(lv.traps,C['--trap'],'TRAP');
+  // Fixed walls, then every part.
+  g.fillStyle=C['--wall'];
+  for(let ty=0;ty<TH;ty++)for(let tx=0;tx<TW;tx++)if(lv.tiles[ty][tx].k==='wall'&&!lv.tiles[ty][tx].placed)g.fillRect(tx*T,ty*T,T+.5,T+.5);
+  wallEdges();
+  for(let ty=0;ty<TH;ty++)for(let tx=0;tx<TW;tx++){const t=lv.tiles[ty][tx];if(t.k!=='wall'||t.placed)drawTile(t,tx,ty,1);}
+  // Source: a ring with an arrow showing which way the packet leaves.
+  const a=(L.dir||0)*Math.PI/180,sx=lv.source.x*S,sy=lv.source.y*S;
+  g.strokeStyle=C['--wave'];g.lineWidth=Math.max(1,S*.4);g.beginPath();g.arc(sx,sy,T*.7,0,7);g.stroke();
+  g.beginPath();g.moveTo(sx+Math.cos(a)*T*.9,sy+Math.sin(a)*T*.9);g.lineTo(sx+Math.cos(a)*T*1.6,sy+Math.sin(a)*T*1.6);g.stroke();
+  // Ghost of the part about to be placed.
+  if(building&&hover&&sel&&sel!=='remove'&&!partAt(hover.tx,hover.ty)){
+    const p={type:sel,tx:hover.tx,ty:hover.ty,rot:ghostRot[sel]},ok=remaining(sel)>0&&E.canPlace(L,placed,p);
+    for(const [x,y] of E.partTiles(p)){if(x<0||y<0||x>=TW||y>=TH)continue;
+      g.globalAlpha=.55;drawTile({k:p.type,rot:p.rot,placed:true},x,y,1);g.globalAlpha=1;
+      g.strokeStyle=ok?C['--exit']:C['--trap'];g.lineWidth=Math.max(1,S*.35);g.strokeRect(x*T+1,y*T+1,T-2,T-2);}
+  }else if(building&&hover){const q=partAt(hover.tx,hover.ty);if(q){g.strokeStyle=sel==='remove'?C['--trap']:C['--ink'];g.lineWidth=Math.max(1,S*.35);
+    for(const [x,y] of E.partTiles(q))g.strokeRect(x*T+1,y*T+1,T-2,T-2);}}
+}
+function outline(tiles,color,label){
+  if(!tiles.length)return;const T=TILE*S,set=new Set(tiles.map(([x,y])=>y*TW+x));
+  g.strokeStyle=color;g.lineWidth=Math.max(1,S*.45);g.beginPath();
+  for(const [x,y] of tiles){
+    if(!set.has((y-1)*TW+x)){g.moveTo(x*T,y*T);g.lineTo(x*T+T,y*T);} if(!set.has((y+1)*TW+x)){g.moveTo(x*T,y*T+T);g.lineTo(x*T+T,y*T+T);}
+    if(!set.has(y*TW+x-1)){g.moveTo(x*T,y*T);g.lineTo(x*T,y*T+T);} if(!set.has(y*TW+x+1)){g.moveTo(x*T+T,y*T);g.lineTo(x*T+T,y*T+T);}}
+  g.stroke();
+  // One label per connected region.
+  g.fillStyle=color;g.font=`${Math.round(T*.55)}px ${C.mono}`;g.textAlign='center';g.textBaseline='middle';
+  const seen=new Set();
+  for(const [x0,y0] of tiles){if(seen.has(y0*TW+x0))continue;
+    const stack=[[x0,y0]],xs=[],ys=[];seen.add(y0*TW+x0);
+    while(stack.length){const [x,y]=stack.pop();xs.push(x);ys.push(y);
+      for(const [a,b] of [[x+1,y],[x-1,y],[x,y+1],[x,y-1]]){const k=b*TW+a;if(set.has(k)&&!seen.has(k)){seen.add(k);stack.push([a,b]);}}}
+    const cx=(Math.min(...xs)+Math.max(...xs)+1)/2*T,cy=(Math.min(...ys)+Math.max(...ys)+1)/2*T,narrow=Math.max(...xs)-Math.min(...xs)<2&&Math.max(...ys)-Math.min(...ys)>=2;
+    if(narrow){g.save();g.translate(cx,cy);g.rotate(-Math.PI/2);g.fillText(label,0,0);g.restore();}else g.fillText(label,cx,cy);}
+}
+function wallEdges(){
+  const T=TILE*S,open=(x,y)=>x>=0&&y>=0&&x<TW&&y<TH&&lv.tiles[y][x].k!=='wall';
+  g.strokeStyle=C['--wallhi'];g.lineWidth=Math.max(1,S/3);g.beginPath();
+  for(let ty=0;ty<TH;ty++)for(let tx=0;tx<TW;tx++){const t=lv.tiles[ty][tx];if(t.k!=='wall'||t.placed)continue;
+    if(open(tx,ty-1)){g.moveTo(tx*T,ty*T);g.lineTo(tx*T+T,ty*T);} if(open(tx,ty+1)){g.moveTo(tx*T,ty*T+T);g.lineTo(tx*T+T,ty*T+T);}
+    if(open(tx-1,ty)){g.moveTo(tx*T,ty*T);g.lineTo(tx*T,ty*T+T);} if(open(tx+1,ty)){g.moveTo(tx*T+T,ty*T);g.lineTo(tx*T+T,ty*T+T);}}
+  g.stroke();
+}
+function drawTile(t,tx,ty){
+  const T=TILE*S,x=tx*T,y=ty*T;
+  if(t.k==='wall'){g.fillStyle=C['--placed'];g.fillRect(x+S*.5,y+S*.5,T-S,T-S);g.strokeStyle=C['--wallhi'];g.lineWidth=Math.max(1,S/3);g.strokeRect(x+S*.5,y+S*.5,T-S,T-S);}
+  else if(t.k==='barrier'){const lo=(TILE/2-E.BAR_W/2)*S,wd=E.BAR_W*S;g.fillStyle=C['--bar'];g.shadowColor=C['--bar'];g.shadowBlur=S*2;
+    if(t.rot)g.fillRect(x,y+lo,T+.5,wd);else g.fillRect(x+lo,y,wd,T+.5);g.shadowBlur=0;}
+  else if(t.k==='mirror'){g.strokeStyle=C['--mirror'];g.lineWidth=E.MIRROR_W*S;g.lineCap='round';g.shadowColor=C['--mirror'];g.shadowBlur=S*1.5;g.beginPath();
+    if(t.rot){g.moveTo(x,y);g.lineTo(x+T,y+T);}else{g.moveTo(x,y+T);g.lineTo(x+T,y);}g.stroke();g.shadowBlur=0;g.lineCap='butt';}
+  else if(t.k==='eye'){const [dx,dy]=E.DIRS[t.rot],cx=x+T/2,cy=y+T/2;
+    g.fillStyle=C['--sight'];g.beginPath();g.ellipse(cx,cy,T*.42,T*.28,dy?Math.PI/2:0,0,7);g.fill();
+    g.fillStyle=C['--void'];g.beginPath();g.arc(cx+dx*T*.14,cy+dy*T*.14,T*.13,0,7);g.fill();}
+  else if(t.k==='gaze'){const a=g.globalAlpha;g.globalAlpha=a*.6;g.strokeStyle=C['--sight'];g.lineWidth=Math.max(1,S*.3);
+    g.setLineDash([S*1.5,S*1.5]);g.strokeRect(x+S,y+S,T-2*S,T-2*S);g.setLineDash([]);g.globalAlpha=a;}
+}
+
+// ---------- Building ----------
+function partAt(tx,ty){return placed.find(p=>E.partTiles(p).some(([x,y])=>x===tx&&y===ty));}
+const ROTS={mirror:2,wall:2,barrier:2,eye:4};
+function tileAt(e){const r=field.getBoundingClientRect();return {tx:Math.floor((e.clientX-r.left)/r.width*TW),ty:Math.floor((e.clientY-r.top)/r.height*TH)};}
+function clickTile(tx,ty,remove){
+  if(mode!=='build')return;
+  const q=partAt(tx,ty);
+  if(q){
+    if(remove||sel==='remove'){placed.splice(placed.indexOf(q),1);}
+    else{const others=placed.filter(x=>x!==q);for(let k=1;k<ROTS[q.type];k++){const r={...q,rot:(q.rot+k)%ROTS[q.type]};if(E.canPlace(L,others,r)){q.rot=r.rot;ghostRot[q.type]=r.rot;break;}}}
+  }else if(sel&&sel!=='remove'&&!remove&&remaining(sel)>0){
+    const p={type:sel,tx,ty,rot:ghostRot[sel]};
+    if(E.canPlace(L,placed,p)){placed.push(p);if(remaining(sel)===0)sel=Object.keys(L.parts).find(t=>remaining(t)>0)||sel;}
+  }else return;
+  save();rebuild();
+}
+field.addEventListener('pointermove',e=>{hover=tileAt(e);});
+field.addEventListener('pointerleave',()=>hover=null);
+field.addEventListener('pointerdown',e=>{if(e.button===2)return;const t=tileAt(e);hover=t;clickTile(t.tx,t.ty,false);});
+field.addEventListener('contextmenu',e=>{e.preventDefault();const t=tileAt(e);clickTile(t.tx,t.ty,true);});
+field.addEventListener('wheel',e=>{if(mode!=='build'||!sel||sel==='remove')return;e.preventDefault();ghostRot[sel]=(ghostRot[sel]+(e.deltaY>0?1:ROTS[sel]-1))%ROTS[sel];},{passive:false});
+
+// ---------- Buttons and keys ----------
+const toggleRun=()=>mode==='build'?play():stop();
+$('playBtn').onclick=toggleRun;
+$('fastBtn').onclick=()=>{fast=!fast;$('fastBtn').classList.toggle('on',fast);};
+$('clearBtn').onclick=()=>{if(mode!=='build')stop();placed=[];save();rebuild();};
+$('hintBtn').onclick=()=>{showHint=!showHint;$('lvHint').hidden=!showHint;$('hintBtn').textContent=showHint?'Hide hint (H)':'Show hint (H)';};
+const setPhase=v=>{phaseView=v;store.set('phase',v);$('phaseBtn').classList.toggle('on',v);};
+$('phaseBtn').onclick=()=>setPhase(!phaseView);setPhase(phaseView);
+$('menuBtn').onclick=showTitle;
+addEventListener('keydown',e=>{
+  if($('game').hidden||e.ctrlKey||e.metaKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(k===' '){e.preventDefault();if(document.activeElement&&document.activeElement.tagName==='BUTTON'&&document.activeElement!==$('playBtn'))document.activeElement.blur();toggleRun();}
+  else if(k==='f'){$('fastBtn').click();}
+  else if(k==='p')setPhase(!phaseView);
+  else if(k==='h')$('hintBtn').click();
+  else if((k==='q'||k==='e')&&sel&&sel!=='remove'){ghostRot[sel]=(ghostRot[sel]+(k==='e'?1:ROTS[sel]-1))%ROTS[sel];}
+  else if(/^[1-5]$/.test(k)&&mode==='build'){const b=$('palette').querySelectorAll('button')[+k-1];if(b)b.click();}
+  else if(k==='escape')showTitle();
+});
+
+window.CollapseUI={startGame,loadLevel,get sim(){return sim;},get placed(){return placed;},play,stop,clickTile};
+showTitle();
+})();
+</script>
+</body>
+</html>
