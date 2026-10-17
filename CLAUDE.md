@@ -1,6 +1,6 @@
 # Quantum Games
 
-Browser games built on real quantum mechanics. A sibling of the causal-games repo, with the same recipe. Live at https://krishnashub.github.io/quantum-games/ once GitHub Pages is switched on.
+Browser games built on real quantum mechanics. A sibling of the causal-games repo, with the same recipe. Live at https://krishnashub.github.io/quantum-games/ (GitHub Pages deploys from `main`, root folder).
 
 - Start each session from [TODO.md](TODO.md). [DESIGN.md](DESIGN.md) has the design for every game and the tuning notes for Collapse.
 - Every game is **one standalone HTML file** in its own folder, so it can go on GitHub Pages and be shared. Use a server only if there is a very strong reason.
